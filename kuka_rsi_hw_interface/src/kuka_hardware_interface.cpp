@@ -84,12 +84,17 @@ KukaHardwareInterface::KukaHardwareInterface() :
   ROS_INFO_STREAM_NAMED("hardware_interface", "Loaded kuka_rsi_hardware_interface");
 }
 
-KukaHardwareInterface::~KukaHardwareInterface()
-{
+KukaHardwareInterface::~KukaHardwareInterface() {}
 
+void KukaHardwareInterface::setIO(std::map<std::string, bool> digital_output) {
+  rsi_digital_output_ = digital_output;
 }
 
-bool KukaHardwareInterface::read(const ros::Time time, const ros::Duration period)
+void KukaHardwareInterface::resetIO() {
+  rsi_digital_output_.clear();
+}
+
+    bool KukaHardwareInterface::read(const ros::Time time, const ros::Duration period)
 {
   in_buffer_.resize(1024);
 
@@ -98,9 +103,9 @@ bool KukaHardwareInterface::read(const ros::Time time, const ros::Duration perio
     return false;
   }
 
-  if (rt_rsi_pub_->trylock()){
-    rt_rsi_pub_->msg_.data = in_buffer_;
-    rt_rsi_pub_->unlockAndPublish();
+  if (rt_rsi_read_pub_->trylock()){
+    rt_rsi_read_pub_->msg_.data = in_buffer_;
+    rt_rsi_read_pub_->unlockAndPublish();
   }
 
   rsi_state_ = RSIState(in_buffer_);
@@ -122,9 +127,14 @@ bool KukaHardwareInterface::write(const ros::Time time, const ros::Duration peri
     rsi_joint_position_corrections_[i] = (RAD2DEG * joint_position_command_[i]) - rsi_initial_joint_positions_[i];
   }
 
-  out_buffer_ = RSICommand(rsi_joint_position_corrections_, ipoc_).xml_doc;
-  server_->send(out_buffer_);
+  out_buffer_ = RSICommand(rsi_joint_position_corrections_, rsi_digital_output_, ipoc_).xml_doc;
 
+  if (rt_rsi_write_pub_->trylock()){
+    rt_rsi_write_pub_->msg_.data = out_buffer_;
+    rt_rsi_write_pub_->unlockAndPublish();
+  }
+  server_->send(out_buffer_);
+  resetIO();
   return true;
 }
 
@@ -145,8 +155,9 @@ void KukaHardwareInterface::start()
     rsi_initial_joint_positions_[i] = rsi_state_.initial_positions[i];
   }
   ipoc_ = rsi_state_.ipoc;
-  out_buffer_ = RSICommand(rsi_joint_position_corrections_, ipoc_).xml_doc;
+  out_buffer_ = RSICommand(rsi_joint_position_corrections_, rsi_digital_output_, ipoc_).xml_doc;
   server_->send(out_buffer_);
+  resetIO();
   // Set receive timeout to 1 second
   server_->set_timeout(1000);
   ROS_INFO_STREAM_NAMED("kuka_hardware_interface", "Got connection from robot");
@@ -165,7 +176,8 @@ void KukaHardwareInterface::configure()
     ROS_ERROR("Failed to get RSI listen address or listen port from parameter server!");
     throw std::runtime_error("Failed to get RSI listen address or listen port from parameter server.");
   }
-  rt_rsi_pub_.reset(new realtime_tools::RealtimePublisher<std_msgs::String>(nh_, "rsi_xml_doc", 3));
+  rt_rsi_read_pub_.reset(new realtime_tools::RealtimePublisher<std_msgs::String>(nh_, "rsi_read_xml", 3));
+  rt_rsi_write_pub_.reset(new realtime_tools::RealtimePublisher<std_msgs::String>(nh_, "rsi_write_xml", 3));
 }
 
 } // namespace kuka_rsi_hardware_interface

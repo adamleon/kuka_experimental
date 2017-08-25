@@ -38,6 +38,28 @@
  */
 
 #include <kuka_rsi_hw_interface/kuka_hardware_interface.h>
+#include <kuka_rsi_hw_interface_msgs/SetIO.h>
+
+struct InterfaceHandler {
+  kuka_rsi_hw_interface::KukaHardwareInterface interface_;
+
+  bool setIO(kuka_rsi_hw_interface_msgs::SetIO::Request &req, kuka_rsi_hw_interface_msgs::SetIO::Response &res) {
+    std::map<std::string, bool> digital_output;
+    if(req.io_name.size() != req.io_value.size()) {
+      ROS_ERROR("Received IO Request with different sizes");
+      return false;
+    }
+
+    for(int i = 0; i < req.io_name.size(); ++i) {
+      digital_output[req.io_name[i]] = req.io_value[i];
+    }
+
+    interface_.setIO(digital_output);
+    return true;
+  }
+};
+
+
 
 int main(int argc, char** argv)
 {
@@ -50,8 +72,9 @@ int main(int argc, char** argv)
 
   ros::NodeHandle nh;
 
-  kuka_rsi_hw_interface::KukaHardwareInterface kuka_rsi_hw_interface;
-  kuka_rsi_hw_interface.configure();
+
+  InterfaceHandler handler;
+  handler.interface_.configure();
 
   // Set up timers
   ros::Time timestamp;
@@ -59,9 +82,11 @@ int main(int argc, char** argv)
   auto stopwatch_last = std::chrono::steady_clock::now();
   auto stopwatch_now = stopwatch_last;
 
-  controller_manager::ControllerManager controller_manager(&kuka_rsi_hw_interface, nh);
+  ros::ServiceServer io_handling_srv = nh.advertiseService("set_io", &InterfaceHandler::setIO, &handler);
 
-  kuka_rsi_hw_interface.start();
+  controller_manager::ControllerManager controller_manager(&handler.interface_, nh);
+
+  handler.interface_.start();
 
   // Get current time and elapsed time since last read
   timestamp = ros::Time::now();
@@ -74,7 +99,7 @@ int main(int argc, char** argv)
   //while (!g_quit)
   {
     // Receive current state from robot
-    if (!kuka_rsi_hw_interface.read(timestamp, period))
+    if (!handler.interface_.read(timestamp, period))
     {
       ROS_FATAL_NAMED("kuka_hardware_interface", "Failed to read state from robot. Shutting down!");
       ros::shutdown();
@@ -90,7 +115,7 @@ int main(int argc, char** argv)
     controller_manager.update(timestamp, period);
 
     // Send new setpoint to robot
-    kuka_rsi_hw_interface.write(timestamp, period);
+    handler.interface_.write(timestamp, period);
   }
 
   spinner.stop();

@@ -96,9 +96,11 @@ private:
   RSICommand rsi_command_;
   std::vector<double> rsi_initial_joint_positions_;
   std::vector<double> rsi_joint_position_corrections_;
+  std::map<std::string, bool> rsi_digital_output_;
   unsigned long long ipoc_;
 
-  std::unique_ptr<realtime_tools::RealtimePublisher<std_msgs::String> > rt_rsi_pub_;
+  std::unique_ptr<realtime_tools::RealtimePublisher<std_msgs::String> > rt_rsi_read_pub_;
+  std::unique_ptr<realtime_tools::RealtimePublisher<std_msgs::String> > rt_rsi_write_pub_;
 
   std::unique_ptr<UDPServer> server_;
   std::string local_host_;
@@ -121,6 +123,9 @@ public:
 
   KukaHardwareInterface();
   ~KukaHardwareInterface();
+
+  void setIO(std::map<std::string, bool> digital_output);
+  void resetIO();
 
   void start();
   void configure();

@@ -11,11 +11,12 @@ find_package(catkin REQUIRED COMPONENTS
   realtime_tools
   roscpp
   std_msgs
+  message_generation
+  kuka_rsi_hw_interface_msgs
 )
 
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(TinyXML REQUIRED)
-
 
 catkin_package(
   INCLUDE_DIRS
@@ -32,7 +33,6 @@ catkin_package(
     TinyXML
 )
 
-
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
@@ -42,7 +42,7 @@ include_directories(
 
 add_library(kuka_hardware_interface
   src/kuka_hardware_interface.cpp
-)
+        src/kuka_hardware_interface_test_client.cpp)
 
 target_link_libraries(kuka_hardware_interface
   ${catkin_LIBRARIES}
@@ -54,7 +54,19 @@ add_executable(kuka_hardware_interface_node
   src/kuka_hardware_interface_node.cpp
 )
 
+add_dependencies(kuka_hardware_interface_node kuka_rsi_hw_interface_msgs_generate_messages_cpp)
+
 target_link_libraries(kuka_hardware_interface_node
+  kuka_hardware_interface
+)
+
+add_executable(kuka_hardware_interface_test_client
+  src/kuka_hardware_interface_test_client.cpp
+)
+
+add_dependencies(kuka_hardware_interface_test_client kuka_rsi_hw_interface_msgs_generate_messages_cpp)
+
+target_link_libraries(kuka_hardware_interface_test_client
   kuka_hardware_interface
 )
 
